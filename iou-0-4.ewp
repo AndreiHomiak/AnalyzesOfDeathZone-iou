@@ -2051,6 +2051,12 @@
             <name>$PROJ_DIR$\drivers\canHandler.h</name>
         </file>
         <file>
+            <name>$PROJ_DIR$\drivers\flash.c</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\drivers\flash.h</name>
+        </file>
+        <file>
             <name>$PROJ_DIR$\drivers\fm24w256.c</name>
         </file>
         <file>

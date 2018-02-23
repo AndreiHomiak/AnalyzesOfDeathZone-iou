@@ -1,78 +1,101 @@
-#include "canHandler.h"
+﻿#include "canHandler.h"
 
 uint8_t CommandProcessing(CanRxMsg *rxMessage)
 {  
     uint32_t viewMsg = rxMessage->ExtId & 0xFFFF0000;
-    uint8_t DA, SA, rezult = 0xFE;
+    uint8_t DA, SA, IDS, rezult = 0xFE;
     DA = (rxMessage->ExtId & 0x0000FF00) >> 8;
     SA =  rxMessage->ExtId & 0x000000FF;
+    IDS = DA;
+    uint8_t num_sens, poz;
     
-    if(DA == CAN_IOU_ADRESS)
-    {
-        switch(viewMsg)
-        {
-            case CAN_ID_CMD:
-                
-                    switch (rxMessage->Data[0])
-                    {
-                        case CAMERA_SWITCH:
-                            ChoiceVideoChannel(rxMessage->Data[1], rxMessage->Data[2]);
-                            rezult = 0x00;
-                            CanSendAck(CAN_DCU_ADRESS, CAMERA_SWITCH, rezult);
-                        break;
+	switch(viewMsg)
+	{
+		case CAN_ID_CMD:
+			
+			if(DA == CAN_IOU_ADRESS)
+			{
+				switch (rxMessage->Data[0])
+				{
+					case CAMERA_SWITCH:
+						ChoiceVideoChannel(rxMessage->Data[1], rxMessage->Data[2]);
+						rezult = 0x00;
+						CanSendAck(CAN_DCU_ADRESS, CAMERA_SWITCH, rezult);
+					break;
                             
-                        case SWITCH1_MUTE:
-                            VideoSwitch_1_Mute();
-                            rezult = 0x00;
-                            CanSendAck(CAN_DCU_ADRESS, SWITCH1_MUTE, rezult);
-                        break;
+					case SWITCH1_MUTE:
+						VideoSwitch_1_Mute();
+						rezult = 0x00;
+						CanSendAck(CAN_DCU_ADRESS, SWITCH1_MUTE, rezult);
+					break;
                             
-                        case SWITCH2_MUTE:
-                            VideoSwitch_2_Mute();
-                            rezult = 0x00;
-                            CanSendAck(CAN_DCU_ADRESS, SWITCH2_MUTE, rezult);
-                        break;
+					case SWITCH2_MUTE:
+						VideoSwitch_2_Mute();
+						rezult = 0x00;
+						CanSendAck(CAN_DCU_ADRESS, SWITCH2_MUTE, rezult);
+					break;
                         
-                        case SWITCH1_STANDBY:
-                            VideoSwitch_1_Standby();
-                            rezult = 0x00;
-                            CanSendAck(CAN_DCU_ADRESS, SWITCH1_STANDBY, rezult);
-                        break;
+					case SWITCH1_STANDBY:
+						VideoSwitch_1_Standby();
+						rezult = 0x00;
+						CanSendAck(CAN_DCU_ADRESS, SWITCH1_STANDBY, rezult);
+					break;
                             
-                        case SWITCH2_STANDBY:
-                            VideoSwitch_2_Standby();
-                            rezult = 0x00;
-                            CanSendAck(CAN_DCU_ADRESS, SWITCH2_STANDBY, rezult);
-                        break;
+					case SWITCH2_STANDBY:
+						VideoSwitch_2_Standby();
+						rezult = 0x00;
+						CanSendAck(CAN_DCU_ADRESS, SWITCH2_STANDBY, rezult);
+					break;
                             
-                        case ENABLE_CAMERAS:
-                            EnableCameras();
-                            rezult = 0x00;
-                            CanSendAck(CAN_DCU_ADRESS, ENABLE_CAMERAS, rezult);                        
-                        break;
+					case ENABLE_CAMERAS:
+						EnableCameras();
+						rezult = 0x00;
+						CanSendAck(CAN_DCU_ADRESS, ENABLE_CAMERAS, rezult);                        
+					break;
                             
-                        case DISABLE_CAMERAS:
-                            DisableCameras();
-                            rezult = 0x00;
-                            CanSendAck(CAN_DCU_ADRESS, DISABLE_CAMERAS, rezult);
-                        break;
-                    }    
-            break;
+					case DISABLE_CAMERAS:
+						DisableCameras();
+						rezult = 0x00;
+						CanSendAck(CAN_DCU_ADRESS, DISABLE_CAMERAS, rezult);
+					break;
+						
+					case GET_DISTANCE:
+						num_sens = rxMessage->Data[1];
+						switch(num_sens)
+						{
+							case 0x01: CanSendMess(DISTANCE_1); break;
+							case 0x02: CanSendMess(DISTANCE_2); break;
+							case 0x03: CanSendMess(DISTANCE_3); break;
+							case 0x04: CanSendMess(DISTANCE_4); break;
+							case 0x05: CanSendMess(DISTANCE_5); break;
+							case 0x06: CanSendMess(DISTANCE_6); break;
+							case 0x07: CanSendMess(DISTANCE_7); break;
+							case 0x08: CanSendMess(DISTANCE_8); break;
+							default: 
+								rezult = 0x01;
+								CanSendAck(CAN_DCU_ADRESS, GET_DISTANCE, rezult);
+							break;
+						}
+					break;
+				}
+			}
+		break;
             
             
-            case CAN_ID_GLB:
-                    
-                    switch(SA)
-                    {
-                        case CAN_DCU_ADRESS:
-                            break;
-                            
-                        case CAN_SENSOR_ADRESS:
-                            DistanceProcessing(&rxMessage->Data[0]);//!!!!!!!!!!!!
-                            break;
-                    }
-            break;
-        }
+		case CAN_ID_GLB:
+				
+				switch(SA)
+				{
+					case CAN_DCU_ADRESS:
+					break;
+						
+					case CAN_SENSOR_ADRESS:
+						poz = ProcessingSensorID(rxMessage->Data);
+						if(poz == 0xFF)
+						DistanceProcessing(poz, rxMessage->Data);
+					break;
+				}
+		break;       
     }
     return 0; 
 }
@@ -100,38 +123,82 @@ void CanSendMess(uint8_t name_mess)
     switch(name_mess)
     {
         case ADC1_VALUE:
-                buf = GetValueFromADC1();
-                *(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) buf;
-            break;
+			buf = GetValueFromADC1();
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) buf;
+		break;
             
         case ADC2_VALUE:
-                buf = GetValueFromADC2();
-                *(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) buf;
-            break;
+			buf = GetValueFromADC2();
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) buf;
+		break;
             
         case ADC1_VALUE_CONV:
-                buf = GetValueFromADC1();
-                buff = ConvertADCvalueToVoltageFloat(buf);
-                buf = (uint16_t) roundf(buff * 1000);
-                *(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) buf;
-            break;
+			buf = GetValueFromADC1();
+			buff = ConvertADCvalueToVoltageFloat(buf);
+			buf = (uint16_t) roundf(buff * 1000);
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) buf;
+		break;
             
         case ADC2_VALUE_CONV:
-                buf = GetValueFromADC2();
-                buff = ConvertADCvalueToVoltageFloat(buf);
-                buf = (uint16_t) roundf(buff * 1000);
-                *(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) buf;
-            break;
+			buf = GetValueFromADC2();
+			buff = ConvertADCvalueToVoltageFloat(buf);
+			buf = (uint16_t) roundf(buff * 1000);
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) buf;
+		break;
             
         case VERSION_PO:
-                TxMessage.Data[0] = VERSION_PO_MICRO;
-                TxMessage.Data[1] = VERSION_PO_MINOR;
-                TxMessage.Data[2] = VERSION_PO_MAJOR;
-            break;
+			TxMessage.Data[0] = VERSION_PO_MICRO;
+			TxMessage.Data[1] = VERSION_PO_MINOR;
+			TxMessage.Data[2] = VERSION_PO_MAJOR;
+		break;
+		
+		case STATUS_REG:
+			TxMessage.Data[0] = status_reg_sensors;
+		break;
+		
+		case DISTANCE_1:
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) distance_from_sensors[0];
+			*(uint16_t *)(&TxMessage.Data[2]) = (uint16_t) distance_prev_from_sensors[0];
+		break;
+		
+		case DISTANCE_2:
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) distance_from_sensors[1];
+			*(uint16_t *)(&TxMessage.Data[2]) = (uint16_t) distance_prev_from_sensors[1];		
+		break;
+		
+		case DISTANCE_3:
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) distance_from_sensors[2];
+			*(uint16_t *)(&TxMessage.Data[2]) = (uint16_t) distance_prev_from_sensors[2];
+		break;
+		
+		case DISTANCE_4:
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) distance_from_sensors[3];
+			*(uint16_t *)(&TxMessage.Data[2]) = (uint16_t) distance_prev_from_sensors[3];
+		break;
+		
+		case DISTANCE_5:
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) distance_from_sensors[4];
+			*(uint16_t *)(&TxMessage.Data[2]) = (uint16_t) distance_prev_from_sensors[4];
+		break;
+		
+		case DISTANCE_6:
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) distance_from_sensors[5];
+			*(uint16_t *)(&TxMessage.Data[2]) = (uint16_t) distance_prev_from_sensors[5];
+		break;
+		
+		case DISTANCE_7:
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) distance_from_sensors[6];
+			*(uint16_t *)(&TxMessage.Data[2]) = (uint16_t) distance_prev_from_sensors[6];
+		break;
+		
+		case DISTANCE_8:
+			*(uint16_t *)(&TxMessage.Data[0]) = (uint16_t) distance_from_sensors[7];
+			*(uint16_t *)(&TxMessage.Data[2]) = (uint16_t) distance_prev_from_sensors[7];
+		break;
             
         default:
             fSend = 0;
-            break;
+		break;
     }
     
     if(fSend)
@@ -200,130 +267,89 @@ void CanSpamer(void)
     }
 }
 
-void DistanceProcessing(uint8_t *data)
+void DistanceProcessing(uint8_t poz, uint8_t *data)
 {
-    CanTxMsg TxMessage;
-    TxMessage.StdId = 0x00;
-    TxMessage.ExtId = CAN_ID_GLB | ((uint16_t)FROM_SENSORS<<8) | CAN_IOU_ADRESS;
-    TxMessage.IDE = CAN_Id_Extended;				
-	TxMessage.RTR = CAN_RTR_DATA;					
-	TxMessage.DLC = 8;
-    TxMessage.Data[0] = 0xFF;
-    TxMessage.Data[1] = 0xFF;
-    TxMessage.Data[2] = 0xFF;
-    TxMessage.Data[3] = 0xFF;
-    TxMessage.Data[4] = 0xFF;
-    TxMessage.Data[5] = 0xFF;
-    TxMessage.Data[6] = 0xFF;
-    TxMessage.Data[7] = 0xFF;
+	//вытягивание чисел
+	uint16_t distance_cur = *(uint16_t *)(&data[2]);
     
-    
-    switch(data[0])
-    {
-        case 0x01:
-            distance_sens1 = *(uint16_t *)(&data[1]); //Проверить!!!!!!!!!!
-            break;
-            
-        case 0x02:
-            distance_sens2 = *(uint16_t *)(&data[1]);
-            break;
-        
-        case 0x03:
-            distance_sens3 = *(uint16_t *)(&data[1]);
-            break;
-            
-        case 0x04:
-            distance_sens4 = *(uint16_t *)(&data[1]);
-            break;
-        default:
-            break;
-    }
-    
-    flag_danger_sens1 = NumberInDistance(distance_sens1);
-    flag_danger_sens2 = NumberInDistance(distance_sens2);
-    flag_danger_sens3 = NumberInDistance(distance_sens3);
-    flag_danger_sens4 = NumberInDistance(distance_sens4);
-    
-    if( flag_danger_sens1==0 && flag_danger_sens2==0 && 
-        flag_danger_sens3==0 && flag_danger_sens4==0)
-    {
-        TxMessage.Data[0] = 0x00;
-    }
-    else if(flag_danger_sens1==0 && flag_danger_sens2==0 && 
-            flag_danger_sens3==0 && flag_danger_sens4==1)
-    {
-        TxMessage.Data[0] = 0x01;
-    }
-    else if(flag_danger_sens1==0 && flag_danger_sens2==0 && 
-            flag_danger_sens3==1 && flag_danger_sens4==0)
-    {
-        TxMessage.Data[0] = 0x02;
-    }  
-    else if(flag_danger_sens1==0 && flag_danger_sens2==0 && 
-            flag_danger_sens3==1 && flag_danger_sens4==1)
-    {
-        TxMessage.Data[0] = 0x03;
-    }
-    else if(flag_danger_sens1==0 && flag_danger_sens2==1 && 
-            flag_danger_sens3==0 && flag_danger_sens4==0)
-    {
-        TxMessage.Data[0] = 0x04;
-    } 
-    else if(flag_danger_sens1==0 && flag_danger_sens2==1 && 
-            flag_danger_sens3==0 && flag_danger_sens4==1)
-    {
-        TxMessage.Data[0] = 0x05;
-    }
-    else if(flag_danger_sens1==0 && flag_danger_sens2==1 && 
-            flag_danger_sens3==1 && flag_danger_sens4==0)
-    {
-        TxMessage.Data[0] = 0x06;
-    }
-    else if(flag_danger_sens1==0 && flag_danger_sens2==1 && 
-            flag_danger_sens3==1 && flag_danger_sens4==1)
-    {
-        TxMessage.Data[0] = 0x07;
-    } 
-    else if(flag_danger_sens1==1 && flag_danger_sens2==0 && 
-            flag_danger_sens3==0 && flag_danger_sens4==0)
-    {
-        TxMessage.Data[0] = 0x08;
-    } 
-    else if(flag_danger_sens1==1 && flag_danger_sens2==0 && 
-            flag_danger_sens3==0 && flag_danger_sens4==1)
-    {
-        TxMessage.Data[0] = 0x09;
-    } 
-    else if(flag_danger_sens1==1 && flag_danger_sens2==0 && 
-            flag_danger_sens3==1 && flag_danger_sens4==0)
-    {
-        TxMessage.Data[0] = 0x0A;
-    } 
-    else if(flag_danger_sens1==1 && flag_danger_sens2==0 && 
-            flag_danger_sens3==1 && flag_danger_sens4==1)
-    {
-        TxMessage.Data[0] = 0x0B;
-    } 
-    else if(flag_danger_sens1==1 && flag_danger_sens2==1 && 
-            flag_danger_sens3==0 && flag_danger_sens4==0)
-    {
-        TxMessage.Data[0] = 0x0C;
-    } 
-    else if(flag_danger_sens1==1 && flag_danger_sens2==1 && 
-            flag_danger_sens3==0 && flag_danger_sens4==1)
-    {
-        TxMessage.Data[0] = 0x0D;
-    } 
-    else if(flag_danger_sens1==1 && flag_danger_sens2==1 && 
-            flag_danger_sens3==1 && flag_danger_sens4==0)
-    {
-        TxMessage.Data[0] = 0x0E;
-    } 
-    else if(flag_danger_sens1==1 && flag_danger_sens2==1 && 
-            flag_danger_sens3==1 && flag_danger_sens4==1)
-    {
-        TxMessage.Data[0] = 0x0F;
-    } 
-    
-    CAN_Transmit(CAN1, &TxMessage);
+    if((poz != 0x00) || (poz != 0xFF))
+	{
+		if(poz == sensors_numbers[0][1])
+		{
+			distance_prev_from_sensors[0] = distance_from_sensors[0];
+			distance_from_sensors[0] = distance_cur;
+			NumberInDistance(distance_from_sensors[0], poz);
+		}
+		else if(poz == sensors_numbers[1][1])
+		{
+			distance_prev_from_sensors[1] = distance_from_sensors[1];
+			distance_from_sensors[1] = distance_cur;
+			NumberInDistance(distance_from_sensors[1], poz);
+		}
+		else if(poz == sensors_numbers[2][1])
+		{
+			distance_prev_from_sensors[2] = distance_from_sensors[2];
+			distance_from_sensors[2] = distance_cur;
+			NumberInDistance(distance_from_sensors[2], poz);
+		}
+		else if(poz == sensors_numbers[3][1])
+		{
+			distance_prev_from_sensors[3] = distance_from_sensors[3];
+			distance_from_sensors[3] = distance_cur;
+			NumberInDistance(distance_from_sensors[3], poz);
+		}
+		else if(poz == sensors_numbers[4][1])
+		{
+			distance_prev_from_sensors[4] = distance_from_sensors[4];
+			distance_from_sensors[4] = distance_cur;
+			NumberInDistance(distance_from_sensors[4], poz);
+		}
+		else if(poz == sensors_numbers[5][1])
+		{
+			distance_prev_from_sensors[5] = distance_from_sensors[5];
+			distance_from_sensors[5] = distance_cur;
+			NumberInDistance(distance_from_sensors[5], poz);
+		}
+		else if(poz == sensors_numbers[6][1])
+		{
+			distance_prev_from_sensors[6] = distance_from_sensors[6];
+			distance_from_sensors[6] = distance_cur;
+			NumberInDistance(distance_from_sensors[6], poz);
+		}
+		else if(poz == sensors_numbers[7][1])
+		{
+			distance_prev_from_sensors[7] = distance_from_sensors[7];
+			distance_from_sensors[7] = distance_cur;
+			NumberInDistance(distance_from_sensors[7], poz);
+		}
+		CanSendMess(STATUS_REG);
+	}
+	
+}
+
+uint8_t ProcessingSensorID(uint8_t *data)
+{
+	uint16_t id_sensor = *(uint16_t *)(&data[0]);
+	for(int i = 0; i < 8; i++)
+	{
+		if(id_sensor == sensors_numbers[i][0])
+			return sensors_numbers[i][1];
+	}
+	
+	for(int i = 0; i < 8; i++)
+	{
+		if((sensors_numbers[i][1] == 0xFFFF) || (sensors_numbers[i][1] == 0x0000))
+		{
+			if(id_sensor != 0xFFFF)
+			{
+				sensors_numbers[i][0] = id_sensor;
+				sensors_numbers[i][1] = i + 1;
+				WriteNumberSensorAndPosition();
+				return i + 1;
+			}
+			else
+				return 0xFF;
+		}
+	}
+    return 0xFE;
 }

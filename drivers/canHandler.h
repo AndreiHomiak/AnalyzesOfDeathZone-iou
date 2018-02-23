@@ -9,6 +9,7 @@
 #include "adc.h"
 #include "videoswitch.h"
 #include "global.h"
+#include "flash.h"
 
 #define VERSION_PO_MAJOR    0
 #define VERSION_PO_MINOR    4
@@ -28,7 +29,15 @@
 #define ADC1_VALUE_CONV     0x03
 #define ADC2_VALUE_CONV     0x04
 #define VERSION_PO          0x05
-#define FROM_SENSORS        0x06
+#define STATUS_REG	        0x06
+#define DISTANCE_1			0x07
+#define DISTANCE_2			0x08
+#define DISTANCE_3			0x09
+#define DISTANCE_4			0x10
+#define DISTANCE_5			0x11
+#define DISTANCE_6			0x12
+#define DISTANCE_7			0x13
+#define DISTANCE_8			0x14
 
 
 //commands
@@ -44,9 +53,11 @@
 #define GET_ADC2_VALUE		0x10
 #define GET_ADC1_CONV		0x11
 #define GET_ADC2_CONV		0x12
+#define GET_DISTANCE		0x13
 
 uint8_t CommandProcessing(CanRxMsg *rxMessage);
 void CanSendMess(uint8_t name_mess);
 void CanSendAck(uint16_t unit_adress, uint8_t name_command, uint8_t rezult);
 void CanSpamer(void);
-void DistanceProcessing(uint8_t *data);
+void DistanceProcessing(uint8_t poz, uint8_t *data);
+uint8_t ProcessingSensorID(uint8_t *data);
